@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <title>Solución Telemática de Rastreo Logístico</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
+  <script src="https://js.arcgis.com/4.29/"></script>
+  <style>
+    html, body, #viewDiv {
+      padding: 0;
+      margin: 0;
+      height: 100%;
+      width: 100%;
+      font-family: sans-serif;
+    }
+    #infoPanel {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+      z-index: 99;
+    }
+    .connected { color: green; }
+    .disconnected { color: red; }
+  </style>
+  <script>
+    require([
+      "esri/Map",
+      "esri/views/MapView",
+      "esri/Graphic",
+      "esri/layers/GraphicsLayer"
+    ], function(Map, MapView, Graphic, GraphicsLayer) {
+      const map = new Map({
+        basemap: "streets-navigation-vector"
+      });
+
+      const view = new MapView({
+        container: "viewDiv",
+        map: map,
+        center: [-90.2308, 15.7835], // Guatemala
+        zoom: 7
+      });
+
+      const graphicsLayer = new GraphicsLayer();
+      map.add(graphicsLayer);
+
+      const unidades = [
+        {
+          id: "Unidad-01",
+          coords: [-90.5133, 14.6349],
+          estado: "En ruta",
+          ultimaActualizacion: new Date().toLocaleString()
+        },
+        {
+          id: "Unidad-02",
+          coords: [-91.5180, 14.8451],
+          estado: "Detenida",
+          ultimaActualizacion: new Date().toLocaleString()
+        },
+        {
+          id: "Unidad-03",
+          coords: [-89.8833, 16.9333],
+          estado: "En ruta",
+          ultimaActualizacion: new Date().toLocaleString()
+        }
+      ];
+
+      function agregarMarcadores() {
+        graphicsLayer.removeAll();
+        unidades.forEach(u => {
+          const point = {
+            type: "point",
+            longitude: u.coords[0],
+            latitude: u.coords[1]
+          };
+
+          const symbol = {
+            type: "simple-marker",
+            color: u.estado === "En ruta" ? "green" : "orange",
+            size: 10,
+            outline: {
+              color: "white",
+              width: 1
+            }
+          };
+
+          const graphic = new Graphic({
+            geometry: point,
+            symbol: symbol,
+            attributes: u,
+            popupTemplate: {
+              title: "{id}",
+              content: `
+                Estado: {estado}<br>
+                Última actualización: {ultimaActualizacion}
+              `
+            }
+          });
+
+          graphicsLayer.add(graphic);
+        });
+      }
+
+      agregarMarcadores();
+
+      // Simula actualización GPS (como si viniera de MQTT o HTTP POST)
+      setInterval(() => {
+        // Simula movimiento aleatorio de una unidad
+        unidades[0].coords[0] += (Math.random() - 0.5) * 0.01;
+        unidades[0].coords[1] += (Math.random() - 0.5) * 0.01;
+        unidades[0].ultimaActualizacion = new Date().toLocaleString();
+        agregarMarcadores();
+      }, 5000);
+
+      // Simulación de seguridad de token y conexión
+      let conectado = true;
+      const token = "ABC123-TOKEN-SIMULADO";
+
+      function actualizarEstado() {
+        document.getElementById("estadoConexion").innerHTML = conectado 
+          ? `<span class='connected'>Conectado</span> (Token: ${token})` 
+          : `<span class='disconnected'>Desconectado</span>`;
+      }
+
+      setInterval(() => {
+        conectado = Math.random() > 0.1; // 90% uptime simulado
+        actualizarEstado();
+      }, 7000);
+
+      actualizarEstado();
+    });
+  </script>
+</head>
+<body>
+  <div id="infoPanel">
+    <h3>Rastreo Logístico</h3>
+    <div id="estadoConexion"></div>
+    <small>Simulación de arquitectura cliente-servidor con datos GPS.</small>
+  </div>
+  <div id="viewDiv"></div>
+</body>
+</html>
