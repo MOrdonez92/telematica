@@ -1,0 +1,12 @@
+{
+  "name": "mi-app-html-js",
+  "version": "1.0.0",
+  "description": "App HTML + JS en Azure App Service",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.4"
+  }
+}
