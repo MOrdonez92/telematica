@@ -7,139 +7,222 @@
   <link rel="stylesheet" href="https://js.arcgis.com/4.29/esri/themes/light/main.css" />
   <script src="https://js.arcgis.com/4.29/"></script>
   <style>
-    html, body, #viewDiv {
-      padding: 0;
+    html, body {
       margin: 0;
+      padding: 0;
       height: 100%;
-      width: 100%;
       font-family: sans-serif;
     }
-    #infoPanel {
+    #viewDiv {
       position: absolute;
-      top: 10px;
-      left: 10px;
+      top: 50px;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 50px;
+      background: #1a73e8;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 20px;
+      z-index: 999;
+    }
+    #infoPanel, #statsPanel, #dashboardPanel {
+      position: absolute;
       background: white;
       padding: 10px;
       box-shadow: 2px 2px 8px rgba(0,0,0,0.3);
-      z-index: 99;
+      z-index: 100;
+      font-size: 14px;
+    }
+    #infoPanel {
+      top: 60px;
+      left: 10px;
+    }
+    #statsPanel {
+      top: 60px;
+      left: 280px;
+    }
+    #dashboardPanel {
+      top: 60px;
+      right: 10px;
+      width: 300px;
+      max-height: 70%;
+      overflow-y: auto;
     }
     .connected { color: green; }
     .disconnected { color: red; }
+    select { font-size: 14px; }
   </style>
+</head>
+<body>
+  <nav>
+    <div style="font-weight: bold; font-size: 18px;">Rastreo Vehículos Repartidores</div>
+    <button onclick="cerrarSesion()" style="background: transparent; color: white; border: none; font-size: 14px; cursor: pointer;">Cerrar sesión</button>
+  </nav>
+
+  <div id="infoPanel">
+    <h3>Controles</h3>
+    <div id="estadoConexion"></div>
+    <label for="basemapSelector">Mapa base:</label>
+    <select id="basemapSelector">
+      <option value="streets-navigation-vector">Calles navegación</option>
+      <option value="satellite">Satélite</option>
+      <option value="topo-vector">Topografía</option>
+      <option value="dark-gray-vector">Oscuro</option>
+      <option value="gray-vector">Gris</option>
+    </select><br><br>
+    <label for="vehiculoFiltro">Filtrar por vehículo:</label>
+    <select id="vehiculoFiltro">
+      <option value="todos">Todos</option>
+      <option value="GT-001">GT-001</option>
+      <option value="GT-002">GT-002</option>
+      <option value="GT-003">GT-003</option>
+      <option value="GT-004">GT-004</option>
+      <option value="GT-005">GT-005</option>
+    </select>
+  </div>
+
+  <div id="statsPanel">
+    <div>Vehículos activos: <span id="vehActivos">0</span></div>
+    <div>Total entregas: <span id="totalEntregas">0</span></div>
+    <div>Última entrega: <span id="ultimaEntrega">--</span></div>
+  </div>
+
+  <div id="dashboardPanel">
+    <h3>Entregas recientes</h3>
+    <ul id="listaEntregas"></ul>
+  </div>
+
+  <div id="viewDiv"></div>
+
   <script>
-    require([
-      "esri/Map",
-      "esri/views/MapView",
-      "esri/Graphic",
-      "esri/layers/GraphicsLayer"
-    ], function(Map, MapView, Graphic, GraphicsLayer) {
-      const map = new Map({
-        basemap: "streets-navigation-vector"
-      });
+    require(["esri/Map", "esri/views/MapView", "esri/Graphic", "esri/layers/GraphicsLayer"], 
+    function(Map, MapView, Graphic, GraphicsLayer) {
+      const map = new Map({ basemap: "streets-navigation-vector" });
+      const view = new MapView({ container: "viewDiv", map: map, center: [-90.2308, 15.7835], zoom: 7 });
 
-      const view = new MapView({
-        container: "viewDiv",
-        map: map,
-        center: [-90.2308, 15.7835], // Guatemala
-        zoom: 7
-      });
+      const vehiculoLayer = new GraphicsLayer();
+      const entregaLayer = new GraphicsLayer();
+      map.addMany([entregaLayer, vehiculoLayer]);
 
-      const graphicsLayer = new GraphicsLayer();
-      map.add(graphicsLayer);
-
-      const unidades = [
-        {
-          id: "Unidad-01",
-          coords: [-90.5133, 14.6349],
-          estado: "En ruta",
-          ultimaActualizacion: new Date().toLocaleString()
-        },
-        {
-          id: "Unidad-02",
-          coords: [-91.5180, 14.8451],
-          estado: "Detenida",
-          ultimaActualizacion: new Date().toLocaleString()
-        },
-        {
-          id: "Unidad-03",
-          coords: [-89.8833, 16.9333],
-          estado: "En ruta",
-          ultimaActualizacion: new Date().toLocaleString()
-        }
+      const vehiculos = [
+        { id: "GT-001", coords: [-90.5, 14.6], repartidor: "Carlos López", color: "blue" },
+        { id: "GT-002", coords: [-90.4, 14.7], repartidor: "Ana Morales", color: "blue" },
+        { id: "GT-003", coords: [-90.3, 14.65], repartidor: "Luis Pérez", color: "blue" },
+        { id: "GT-004", coords: [-90.6, 14.5], repartidor: "Sara Díaz", color: "blue" },
+        { id: "GT-005", coords: [-90.7, 14.55], repartidor: "José Gómez", color: "blue" }
       ];
 
-      function agregarMarcadores() {
-        graphicsLayer.removeAll();
-        unidades.forEach(u => {
-          const point = {
-            type: "point",
-            longitude: u.coords[0],
-            latitude: u.coords[1]
-          };
+      function simularMovimiento() {
+        vehiculoLayer.removeAll();
+        vehiculos.forEach(v => {
+          v.coords[0] += (Math.random() - 0.5) * 0.01;
+          v.coords[1] += (Math.random() - 0.5) * 0.01;
 
-          const symbol = {
-            type: "simple-marker",
-            color: u.estado === "En ruta" ? "green" : "orange",
-            size: 10,
-            outline: {
-              color: "white",
-              width: 1
-            }
-          };
-
-          const graphic = new Graphic({
-            geometry: point,
-            symbol: symbol,
-            attributes: u,
-            popupTemplate: {
-              title: "{id}",
-              content: `
-                Estado: {estado}<br>
-                Última actualización: {ultimaActualizacion}
-              `
+          const vehiculo = new Graphic({
+            geometry: { type: "point", longitude: v.coords[0], latitude: v.coords[1] },
+            symbol: { 
+              type: "simple-marker", 
+              color: v.color, 
+              size: 10, 
+              outline: { color: "white", width: 1 } 
+            },
+            attributes: { 
+              id: v.id, 
+              repartidor: v.repartidor, 
+              tipo: "vehiculo" 
+            },
+            popupTemplate: { 
+              title: `Vehículo ${v.id}`, 
+              content: `Repartidor: ${v.repartidor}` 
             }
           });
 
-          graphicsLayer.add(graphic);
+          vehiculoLayer.add(vehiculo);
+
+          if (Math.random() < 0.8) {
+            const estados = ["Entregado", "En camino", "Retrasado"];
+            const estado = estados[Math.floor(Math.random() * estados.length)];
+            
+            const entrega = new Graphic({
+              geometry: { 
+                type: "point", 
+                longitude: v.coords[0], 
+                latitude: v.coords[1] 
+              },
+              symbol: { 
+                type: "simple-marker", 
+                color: "red",  // Puntos de entrega en rojo
+                size: 6, 
+                outline: { color: "white", width: 1 } 
+              },
+              attributes: {
+                tienda: "Tienda #" + Math.floor(Math.random() * 100),
+                hora: new Date().toLocaleTimeString(),
+                entregadoPor: v.repartidor,
+                vehiculo: v.id,
+                estado: estado
+              },
+              popupTemplate: {
+                title: `{tienda}`,
+                content: `Estado: <strong>{estado}</strong><br>
+                          Entregado por: {entregadoPor}<br>
+                          Vehículo: {vehiculo}<br>
+                          Hora: {hora}`
+              }
+            });
+
+            entregaLayer.add(entrega);
+
+            const li = document.createElement("li");
+            li.textContent = `${entrega.attributes.tienda} - ${entrega.attributes.hora} (${entrega.attributes.vehiculo}) - ${entrega.attributes.estado}`;
+            const lista = document.getElementById("listaEntregas");
+            lista.prepend(li);
+            if (lista.children.length > 10) lista.removeChild(lista.lastChild);
+
+            document.getElementById("ultimaEntrega").textContent = entrega.attributes.hora;
+          }
         });
+        document.getElementById("vehActivos").textContent = vehiculos.length;
+        document.getElementById("totalEntregas").textContent = entregaLayer.graphics.length;
       }
 
-      agregarMarcadores();
+      document.getElementById("basemapSelector").addEventListener("change", e => map.basemap = e.target.value);
 
-      // Simula actualización GPS (como si viniera de MQTT o HTTP POST)
+      document.getElementById("vehiculoFiltro").addEventListener("change", e => {
+        const filtro = e.target.value;
+        entregaLayer.graphics.forEach(g => g.visible = (filtro === "todos" || g.attributes.vehiculo === filtro));
+      });
+
+      const token = "ABC123-TOKEN-SIMULADO";
+      function actualizarEstado() {
+        document.getElementById("estadoConexion").innerHTML = `<span class='connected'>Conectado</span> (Token: ${token})`;
+      }
+
       setInterval(() => {
-        // Simula movimiento aleatorio de una unidad
-        unidades[0].coords[0] += (Math.random() - 0.5) * 0.01;
-        unidades[0].coords[1] += (Math.random() - 0.5) * 0.01;
-        unidades[0].ultimaActualizacion = new Date().toLocaleString();
-        agregarMarcadores();
+        actualizarEstado();
+        simularMovimiento();
       }, 5000);
 
-      // Simulación de seguridad de token y conexión
-      let conectado = true;
-      const token = "ABC123-TOKEN-SIMULADO";
-
-      function actualizarEstado() {
-        document.getElementById("estadoConexion").innerHTML = conectado 
-          ? `<span class='connected'>Conectado</span> (Token: ${token})` 
-          : `<span class='disconnected'>Desconectado</span>`;
-      }
-
-      setInterval(() => {
-        conectado = Math.random() > 0.1; // 90% uptime simulado
-        actualizarEstado();
-      }, 7000);
-
       actualizarEstado();
+      simularMovimiento();
+
+      window.cerrarSesion = function() {
+        if (window.msalInstance) {
+          window.msalInstance.logoutRedirect();
+        } else {
+          window.location.href = "https://login.microsoftonline.com/common/oauth2/v2.0/logout";
+        }
+      };
     });
   </script>
-</head>
-<body>
-  <div id="infoPanel">
-    <h3>Rastreo Logístico</h3>
-    <div id="estadoConexion"></div>
-    <small>Simulación de arquitectura cliente-servidor con datos GPS.</small>
-  </div>
-  <div id="viewDiv"></div>
 </body>
 </html>
